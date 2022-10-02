@@ -88,18 +88,29 @@ static unsigned short mode_X_seq[NUM_SEQUENCER_REGS] = {
 };
 static unsigned short mode_X_CRTC[NUM_CRTC_REGS] = {
     0x5F00, 0x4F01, 0x5002, 0x8203, 0x5404, 0x8005, 0xBF06, 0x1F07,
+    0x0008, 0x0109, 0x000A, 0x000B, 0x000C, 0x000D, 0x000E, 0x000F,
+    0x9C10, 0x8E11, 0x8F12, 0x2813, 0x0014, 0x9615, 0xB916, 0xE317,
+    0x6B18
+};
+/*0x5F00, 0x4F01, 0x5002, 0x8203, 0x5404, 0x8005, 0xBF06, 0x1F07,
     0x0008, 0x4109, 0x000A, 0x000B, 0x000C, 0x000D, 0x000E, 0x000F,
     0x9C10, 0x8E11, 0x8F12, 0x2813, 0x0014, 0x9615, 0xB916, 0xE317,
-    0xFF18
-};
+    0xFF18*/
+
 static unsigned char mode_X_attr[NUM_ATTR_REGS * 2] = {
     0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x03, 0x03, 
     0x04, 0x04, 0x05, 0x05, 0x06, 0x06, 0x07, 0x07, 
     0x08, 0x08, 0x09, 0x09, 0x0A, 0x0A, 0x0B, 0x0B, 
     0x0C, 0x0C, 0x0D, 0x0D, 0x0E, 0x0E, 0x0F, 0x0F,
-    0x10, 0x41, 0x11, 0x00, 0x12, 0x0F, 0x13, 0x00,
+    0x10, 0x61, 0x11, 0x00, 0x12, 0x0F, 0x13, 0x00,
     0x14, 0x00, 0x15, 0x00
 };
+/* 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x03, 0x03, 
+    0x04, 0x04, 0x05, 0x05, 0x06, 0x06, 0x07, 0x07, 
+    0x08, 0x08, 0x09, 0x09, 0x0A, 0x0A, 0x0B, 0x0B, 
+    0x0C, 0x0C, 0x0D, 0x0D, 0x0E, 0x0E, 0x0F, 0x0F,
+    0x10, 0x41, 0x11, 0x00, 0x12, 0x0F, 0x13, 0x00,
+    0x14, 0x00, 0x15, 0x00*/
 static unsigned short mode_X_graphics[NUM_GRAPHICS_REGS] = {
     0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x4005, 0x0506, 0x0F07,
     0xFF08
@@ -177,7 +188,7 @@ static void copy_image (unsigned char* img, unsigned short scr_addr);
 #endif
 #define MEM_FENCE_MAGIC 0xF3
 static unsigned char build[BUILD_BUF_SIZE + 2 * MEM_FENCE_WIDTH];
-static int img3_off;		    /* offset of upper left pixel   */
+static int img3_off;	    	    /* offset of upper left pixel   */
 static unsigned char* img3;	    /* pointer to upper left pixel  */
 static int show_x, show_y;          /* logical view coordinates     */
 
@@ -557,6 +568,46 @@ clear_screens ()
  * based on this file, and are omitted to simplify linking that program.
  */
 #if !defined(TEXT_RESTORE_PROGRAM)
+#define STATUS_X_DIM 320
+#define STATUS_Y_DIM 18
+#define STATUS_X_WIDTH (STATUS_X_DIM)/4
+
+void fill_status_bar(char *string)
+{
+    char *addr; /* The location to build buffer*/
+    unsigned char buffer[STATUS_X_DIM*STATUS_Y_DIM] /* status graphic*/
+    char status_build_buffer[STATUS_X_WIDTH*STATUS_Y_DIM] /* status buffer of plane*/
+    convert_string(string,buffer);      /*load the buffer with the string*/
+    addr =(char*)(mem_image+(target_img^0x4000));   /* load the video memory*/
+    
+    for (int i=0;i<4;i++)
+    {
+        for (int m=0;m<STATUS_Y_DIM;m++)
+        {
+            for (int n=0;n<STATUS_X_WIDTH;n++)
+            {
+                status_build_buffer[m*STATUS_X_WIDTH+n]=buffer[m*STATUS_X_DIM+4*n+i];
+            }
+        }
+        SET_WRITE_MASK(1<<(8+i));
+        memcpy(addr,status_build_buffer,STATUS_SIZE);
+    }
+    return;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 /*
@@ -576,7 +627,35 @@ clear_screens ()
 int
 draw_vert_line (int x)
 {
-    /* to be written... */
+    unsigned char buf[SCROLL_Y_DIM]; /* buffer for graphical image of line */
+    unsigned char* addr;             /* address of first pixel in build    */
+   				     /*     buffer (without plane offset)  */
+    int p_off;                       /* offset of plane of first pixel     */
+    int i;			     /* loop index over pixels             */
+
+    /* Check whether requested line falls in the logical view window. */
+    if (x < 0 || x >= SCROLL_X_DIM)
+	return -1;
+
+    /* Adjust y to the logical row value. */
+    x += show_x;
+
+    /* Get the image of the line. */
+    (*vert_line_fn) (x, show_y, buf);
+
+    /* Calculate starting address in build buffer. */
+    addr = img3 + (x >> 2) + show_y * SCROLL_X_WIDTH;
+
+    /* Calculate plane offset of first pixel. */
+    p_off = (3 - (x & 3));
+
+    /* Copy image data into appropriate planes in build buffer. */
+    for (i = 0; i < SCROLL_X_DIM; i++) {
+        addr[p_off * SCROLL_SIZE] = buf[i];
+        addr += SCROLL_X_WIDTH;
+    }
+
+    /* Return success. */
     return 0;
 }
 
@@ -613,7 +692,7 @@ draw_horiz_line (int y)
     /* Get the image of the line. */
     (*horiz_line_fn) (show_x, y, buf);
 
-    /* Calculate starting address in build buffer. */
+    /* Calculate starting    address in build buffer. */
     addr = img3 + (show_x >> 2) + y * SCROLL_X_WIDTH;
 
     /* Calculate plane offset of first pixel. */

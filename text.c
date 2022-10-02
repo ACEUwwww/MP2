@@ -33,9 +33,70 @@
  *		Integrated original release back into main code base.
  */
 
-#include <string.h>
 
+
+#include <string.h>
+#include<cstring>
+#include<cstdio>
 #include "text.h"
+#define STATUS_X_DIM 320
+#define STATUS_Y_DIM 18
+/* 
+ *   convert_string
+ *   DESCRIPTION: Given a string, a buffer,and a mode for this function, convert the string into graphics and 
+ *   set it to a buffer.
+ *   mode 1: room name into buffer
+ *   mode 2: input string into buffer
+ *   mode 3: 
+ *   INPUTS: string,buffer and mode
+ *   OUTPUTS: a buffer with the correct form of the string
+ *   RETURN VALUE: none
+ */
+
+void convert_string(char *string, char *buffer,int mode)
+{
+    unsigned char mask[8]={0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01};
+    // use the mask to judge whether the bit is 0 //
+    
+    for (int i=0;i<STATUS_X_DIM;i++)
+    {
+        for (int j=0;j<STATUS_Y_DIM,j++)
+        {
+            buffer[i*STATUS_X_DIM+j]=50;/* fill the status bar with the color of background */
+        }
+    }
+    if (strlen(string)=0)
+        return;
+
+    offset= (STATUS_X_DIM/2)-(strlen(string)*8/2) 
+
+    for (i=0;i<16;i++)
+    {
+        for (j<0;j<strlen(string)*8;j++)
+        {
+            int k=0;
+            if (font_data[int(string[j/8])][i] & mask[k]!=0)
+            buffer[(i+1)*STATUS_X_DIM+offset+j]=0; /* change the buffer if the bit of the string is not 0 */
+            k++;
+        }
+    }
+    return;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 /* 

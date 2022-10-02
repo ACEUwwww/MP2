@@ -66,7 +66,11 @@ static int sanity_check (void);
 #define TICK_USEC      50000 /* tick length in microseconds          */
 #define STATUS_MSG_LEN 40    /* maximum length of status message     */
 #define MOTION_SPEED   2     /* pixels moved per command             */
-
+#define STATUS_X_DIM 320
+#define STATUS_Y_DIM 16
+#define STATUS_X_WIDTH (STATUS_X_DIM/4)
+#define FONT_HEIGHT 18
+#define FONT_WIDTH 8
 /* outcome of the game */
 typedef enum {GAME_WON, GAME_QUIT} game_condition_t;
 
@@ -248,6 +252,32 @@ game_loop ()
 	}
 
 	show_screen ();
+
+	/* This is for fill the status bar into the vedio memory */
+	if (status_msg[0]!='\0')
+	{
+		pthread_mutex_lock(&msg_lock);
+		fill_status_bar(status_msg);
+		pthread_mutex_unlock(&msg_lock);
+	}
+
+	else
+	{
+		char * room = get_room_name(game_info.where);
+		char * command = (char*)get_typed_command();
+		char status[STATUS_X_DIM/FONT_WIDTH+1];
+		memset(status, ' ',STATUS_X_DIM/FONT_WIDTH)
+
+		int room_name_length= strlen(room_name);
+		int cmd_length= strlen(command);
+
+		memcpy(status,room,(size_t)room_name_length);
+		memcpy(status+(STATUS_X_DIM/FONT_WIDTH)-cmd_length-1,command,(size_t)cmd_len);
+
+		fill_status_bar(status);
+	}
+
+	/* This is for fill the status bar into the vedio memory */
 
 	/*
 	 * Wait for tick.  The tick defines the basic timing of our
