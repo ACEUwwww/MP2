@@ -102,7 +102,7 @@ static unsigned char mode_X_attr[NUM_ATTR_REGS * 2] = {
     0x04, 0x04, 0x05, 0x05, 0x06, 0x06, 0x07, 0x07, 
     0x08, 0x08, 0x09, 0x09, 0x0A, 0x0A, 0x0B, 0x0B, 
     0x0C, 0x0C, 0x0D, 0x0D, 0x0E, 0x0E, 0x0F, 0x0F,
-    0x10, 0x61, 0x11, 0x00, 0x12, 0x0F, 0x13, 0x00,
+    0x10, 0x41, 0x11, 0x00, 0x12, 0x0F, 0x13, 0x00,
     0x14, 0x00, 0x15, 0x00
 };
 /* 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x03, 0x03, 
@@ -571,20 +571,21 @@ clear_screens ()
 #define STATUS_X_DIM 320
 #define STATUS_Y_DIM 18
 #define STATUS_X_WIDTH (STATUS_X_DIM)/4
+#define STATUS_SIZE STATUS_X_WIDTH*STATUS_Y_DIM
 
 void fill_status_bar(char *string)
 {
     char *addr; /* The location to build buffer*/
-    unsigned char buffer[STATUS_X_DIM*STATUS_Y_DIM] /* status graphic*/
-    char status_build_buffer[STATUS_X_WIDTH*STATUS_Y_DIM] /* status buffer of plane*/
-    convert_string(string,buffer);      /*load the buffer with the string*/
+    unsigned char buffer[STATUS_X_DIM*STATUS_Y_DIM]; /* status graphic*/
+    char status_build_buffer[STATUS_X_WIDTH*STATUS_Y_DIM];/* status buffer of plane*/
+    convert_string((char *)string,(char *)buffer);      /*load the buffer with the string*/
     addr =(char*)(mem_image+(target_img^0x4000));   /* load the video memory*/
-    
-    for (int i=0;i<4;i++)
+    int i,m,n;
+    for  (i=0;i<4;i++)
     {
-        for (int m=0;m<STATUS_Y_DIM;m++)
+        for (m=0;m<STATUS_Y_DIM;m++)
         {
-            for (int n=0;n<STATUS_X_WIDTH;n++)
+            for (n=0;n<STATUS_X_WIDTH;n++)
             {
                 status_build_buffer[m*STATUS_X_WIDTH+n]=buffer[m*STATUS_X_DIM+4*n+i];
             }
@@ -594,21 +595,6 @@ void fill_status_bar(char *string)
     }
     return;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /*
  * draw_vert_line

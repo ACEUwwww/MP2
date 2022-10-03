@@ -36,8 +36,6 @@
 
 
 #include <string.h>
-#include<cstring>
-#include<cstdio>
 #include "text.h"
 #define STATUS_X_DIM 320
 #define STATUS_Y_DIM 18
@@ -53,50 +51,39 @@
  *   RETURN VALUE: none
  */
 
-void convert_string(char *string, char *buffer,int mode)
+void convert_string(char *string, char *buffer)
 {
     unsigned char mask[8]={0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01};
     // use the mask to judge whether the bit is 0 //
+    int i,j;
+    int k;
     
-    for (int i=0;i<STATUS_X_DIM;i++)
+    for (i=0;i<STATUS_Y_DIM;i++)
     {
-        for (int j=0;j<STATUS_Y_DIM,j++)
+        for (j=0;j<STATUS_X_DIM;j++)
         {
-            buffer[i*STATUS_X_DIM+j]=50;/* fill the status bar with the color of background */
+            buffer[i*STATUS_X_DIM+j]=20;/* fill the status bar with the color of background */
         }
     }
-    if (strlen(string)=0)
-        return;
 
-    offset= (STATUS_X_DIM/2)-(strlen(string)*8/2) 
-
+    int offset= (STATUS_X_DIM/2)-(strlen(string)*8/2);
+    
     for (i=0;i<16;i++)
     {
-        for (j<0;j<strlen(string)*8;j++)
+        for (j=0;j<strlen(string);j++)
         {
-            int k=0;
-            if (font_data[int(string[j/8])][i] & mask[k]!=0)
-            buffer[(i+1)*STATUS_X_DIM+offset+j]=0; /* change the buffer if the bit of the string is not 0 */
-            k++;
+            for (k=0;k<8;k++)
+            {
+                if ((font_data[(int)string[j]][i] & mask[k])!=0)
+                {
+                    buffer[(i+1)*STATUS_X_DIM+offset+j*8+k]=45;
+                }
+            }
         }
     }
     return;
+
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 /* 

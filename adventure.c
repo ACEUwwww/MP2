@@ -67,9 +67,10 @@ static int sanity_check (void);
 #define STATUS_MSG_LEN 40    /* maximum length of status message     */
 #define MOTION_SPEED   2     /* pixels moved per command             */
 #define STATUS_X_DIM 320
-#define STATUS_Y_DIM 16
+#define STATUS_Y_DIM 18
 #define STATUS_X_WIDTH (STATUS_X_DIM/4)
-#define FONT_HEIGHT 18
+#define STATUS_SIZE STATUS_X_WIDTH*STATUS_Y_DIM
+#define FONT_HEIGHT 16
 #define FONT_WIDTH 8
 /* outcome of the game */
 typedef enum {GAME_WON, GAME_QUIT} game_condition_t;
@@ -265,16 +266,23 @@ game_loop ()
 	{
 		char * room = get_room_name(game_info.where);
 		char * command = (char*)get_typed_command();
-		char status[STATUS_X_DIM/FONT_WIDTH+1];
-		memset(status, ' ',STATUS_X_DIM/FONT_WIDTH)
 
-		int room_name_length= strlen(room_name);
+		char status_buffer[STATUS_X_DIM/FONT_WIDTH+1];
+
+		memset(status_buffer, ' ',STATUS_X_DIM/FONT_WIDTH);
+
+		int room_name_length= strlen(room);
 		int cmd_length= strlen(command);
 
-		memcpy(status,room,(size_t)room_name_length);
-		memcpy(status+(STATUS_X_DIM/FONT_WIDTH)-cmd_length-1,command,(size_t)cmd_len);
+		char *status_left=status_buffer;
+		char *status_right=status_buffer+(STATUS_X_DIM/FONT_WIDTH)-cmd_length-1;
 
-		fill_status_bar(status);
+		memcpy(status_right,command,(size_t)cmd_length);
+		memcpy(status_left,room,(size_t)room_name_length);
+		
+		status_buffer[39]='_';
+		
+		fill_status_bar(status_buffer);
 	}
 
 	/* This is for fill the status bar into the vedio memory */

@@ -292,6 +292,7 @@ static const room_data_t room_data[N_ROOMS] = {
     {R_LIB_FRONT, "Grainger Library", "images/graingerfront.photo", 
                         R_DCL,   R_RESERVE, R_TALBOT_SW},
 
+
     /* Area 3: CSL and Environs */
     { R_KENNEY_E, "East of Kenney", "images/kenneye.photo", 
                         R_DCL,       R_DCL,   R_NEWMARK},
@@ -361,6 +362,15 @@ static const room_data_t room_data[N_ROOMS] = {
                        R_NONE,   R_REM_ICE,      R_NONE}
 };
 
+
+char* get_room_name(room_t * room)
+{
+    return (char*)room->name;
+}
+
+
+
+
 /*
  * This local structure is used to specify object information in a 
  * reasonably manageable way.  The array entries in the database specify 
@@ -402,6 +412,8 @@ static const obj_data_t obj_data[N_OBJECTS] = {
     {O_ROBOT_LIVE, "robot", "images/robot.obj", R_NONE, -1, -1},
     { O_MIMO_CARD, "mimo", "images/mimo.obj", R_STATUE, -1, -1}
 };
+
+
 
 /*
  * Some rooms alternate between two photos.  For these rooms, we load the

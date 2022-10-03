@@ -49,7 +49,6 @@ extern const char* room_name (const room_t* r);
 extern photo_t* room_photo (const room_t* r);
 extern uint32_t room_photo_height (const room_t* r);
 extern uint32_t room_photo_width (const room_t* r);
-
 /* Build the game world.  Returns 0 on failure, or 1 on success. */
 extern int32_t build_world (void);
 
@@ -95,4 +94,5 @@ extern tc_action_t typed_cmd_wear (room_t** rptr, const char* arg);
 /* in adventure.c */
 extern void show_status (const char* s);
 
+char* get_room_name(room_t * room);
 #endif /* WORLD_H */
