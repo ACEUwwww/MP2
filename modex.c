@@ -153,7 +153,7 @@ static void fill_palette_text ();
 static void write_font_data ();
 static void set_text_mode_3 (int clear_scr);
 static void copy_image (unsigned char* img, unsigned short scr_addr);
-
+void copy_status (unsigned char* img, unsigned short scr_addr);
 
 /* 
  * Images are built in this buffer, then copied to the video memory.
@@ -316,7 +316,7 @@ set_mode_X (void (*horiz_fill_fn) (int, int, unsigned char[SCROLL_X_DIM]),
     }
 
     /* One display page goes at the start of video memory. */
-    target_img = 0x0000; 
+    target_img = 0x05A0; 
 
     /* Map video memory and obtain permission for VGA port access. */
     if (open_memory_and_ports () == -1)
@@ -573,26 +573,32 @@ clear_screens ()
 #define STATUS_X_WIDTH (STATUS_X_DIM)/4
 #define STATUS_SIZE STATUS_X_WIDTH*STATUS_Y_DIM
 
+/*
+ *   fill_status_bar
+ *   DESCRIPTION: Fill the status bar in the form of build buffer
+ *   INPUTS: a string that want to put in the middle of the status bar
+ *   OUTPUTS: none
+ *   RETURN VALUE: none
+ *   SIDE EFFECTS: none
+ */   
 void fill_status_bar(char *string)
 {
-    char *addr; /* The location to build buffer*/
-    unsigned char buffer[STATUS_X_DIM*STATUS_Y_DIM]; /* status graphic*/
-    char status_build_buffer[STATUS_X_WIDTH*STATUS_Y_DIM];/* status buffer of plane*/
-    convert_string((char *)string,(char *)buffer);      /*load the buffer with the string*/
-    addr =(char*)(mem_image+(target_img^0x4000));   /* load the video memory*/
-    int i,m,n;
-    for  (i=0;i<4;i++)
+    int i;
+    unsigned char status_buffer[STATUS_X_DIM*STATUS_Y_DIM];
+    convert_string((char *) string, (char *)status_buffer);      /*load the planed buffer with the string*/
+
+    /*      status buffer
+    *       plane0
+    *       plane1
+    *       plane2      
+    *       plane3
+    */
+
+    for (i=0;i<4;i++)
     {
-        for (m=0;m<STATUS_Y_DIM;m++)
-        {
-            for (n=0;n<STATUS_X_WIDTH;n++)
-            {
-                status_build_buffer[m*STATUS_X_WIDTH+n]=buffer[m*STATUS_X_DIM+4*n+i];
-            }
-        }
-        SET_WRITE_MASK(1<<(8+i));
-        memcpy(addr,status_build_buffer,STATUS_SIZE);
-    }
+        SET_WRITE_MASK(1<<(8+i));    // After that ,we will copy each plane we have filled into the build buffer //
+        copy_status(status_buffer+i*STATUS_X_WIDTH*STATUS_Y_DIM,0x0000);  
+    }  
     return;
 }
 
@@ -623,7 +629,7 @@ draw_vert_line (int x)
     if (x < 0 || x >= SCROLL_X_DIM)
 	return -1;
 
-    /* Adjust y to the logical row value. */
+    /* Adjust x to the logical row value. */
     x += show_x;
 
     /* Get the image of the line. */
@@ -636,7 +642,7 @@ draw_vert_line (int x)
     p_off = (3 - (x & 3));
 
     /* Copy image data into appropriate planes in build buffer. */
-    for (i = 0; i < SCROLL_X_DIM; i++) {
+    for (i = 0; i < SCROLL_Y_DIM; i++) {
         addr[p_off * SCROLL_SIZE] = buf[i];
         addr += SCROLL_X_WIDTH;
     }
@@ -978,7 +984,7 @@ write_font_data ()
     OUTW (0x3C4, 0x0704);
     OUTW (0x3CE, 0x0005);
     OUTW (0x3CE, 0x0406);
-    OUTW (0x3CE, 0x0204);
+    OUTW (0x3CE, 0x0204);   
 
     /* Copy font data from array into video memory. */
     for (i = 0, fonts = mem_image; i < 256; i++) {
@@ -1041,8 +1047,7 @@ set_text_mode_3 (int clear_scr)
  *   RETURN VALUE: none
  *   SIDE EFFECTS: copies a plane from the build buffer to video memory
  */   
-static void
-copy_image (unsigned char* img, unsigned short scr_addr)
+static void copy_image (unsigned char* img, unsigned short scr_addr)
 {
     /* 
      * memcpy is actually probably good enough here, and is usually
@@ -1052,6 +1057,33 @@ copy_image (unsigned char* img, unsigned short scr_addr)
     asm volatile (
         "cld                                                 ;"
        	"movl $16000,%%ecx                                   ;"
+       	"rep movsb    # copy ECX bytes from M[ESI] to M[EDI]  "
+      : /* no outputs */
+      : "S" (img), "D" (mem_image + scr_addr) 
+      : "eax", "ecx", "memory"
+    );
+}
+
+/*
+ * copy_status
+ *   DESCRIPTION: Copy one plane of a screen from the status build buffer to the 
+ *                video memory.
+ *   INPUTS: img -- a pointer to a single screen plane in the build buffer
+ *           scr_addr -- the destination offset in video memory
+ *   OUTPUTS: none
+ *   RETURN VALUE: none
+ *   SIDE EFFECTS: copies a plane from the build buffer to video memory
+ */   
+void copy_status (unsigned char* img, unsigned short scr_addr)
+{
+    /* 
+     * memcpy is actually probably good enough here, and is usually
+     * implemented using ISA-specific features like those below,
+     * but the code here provides an example of x86 string moves
+     */
+    asm volatile (
+        "cld                                                 ;"
+       	"movl $1440,%%ecx                                    ;"
        	"rep movsb    # copy ECX bytes from M[ESI] to M[EDI]  "
       : /* no outputs */
       : "S" (img), "D" (mem_image + scr_addr) 

@@ -362,7 +362,14 @@ static const room_data_t room_data[N_ROOMS] = {
                        R_NONE,   R_REM_ICE,      R_NONE}
 };
 
-
+/* 
+ * get_room_name
+ *   DESCRIPTION: Function to get the room name of a room
+ *   INPUTS: a pointer to a struct room
+ *   OUTPUTS: room name of a room
+ *   RETURN VALUE: room name of a room
+ *   SIDE EFFECTS: none
+ */
 char* get_room_name(room_t * room)
 {
     return (char*)room->name;

@@ -39,50 +39,66 @@
 #include "text.h"
 #define STATUS_X_DIM 320
 #define STATUS_Y_DIM 18
+#define STATUS_X_WIDTH (STATUS_X_DIM)/4
+#define STATUS_SIZE STATUS_X_WIDTH*STATUS_Y_DIM
 /* 
  *   convert_string
  *   DESCRIPTION: Given a string, a buffer,and a mode for this function, convert the string into graphics and 
- *   set it to a buffer.
- *   mode 1: room name into buffer
- *   mode 2: input string into buffer
- *   mode 3: 
- *   INPUTS: string,buffer and mode
- *   OUTPUTS: a buffer with the correct form of the string
+ *   set it to a buffer. Status bar have the size of STATUS_X_DIM*STATUS_Y_DIM (18*320).
+ *   INPUTS: a pointer to a string and a pointer to a buffer with the size of the status 
+ *   OUTPUTS: a status buffer with the correct form of the string but not with plane
  *   RETURN VALUE: none
  */
 
-void convert_string(char *string, char *buffer)
+
+void convert_string(char *string,char *status_buffer)
 {
     unsigned char mask[8]={0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01};
+    unsigned char status_plane_buffer[STATUS_X_WIDTH*STATUS_Y_DIM];/* status buffer of plane */
+    unsigned char tem_buffer[STATUS_X_DIM*STATUS_Y_DIM];
     // use the mask to judge whether the bit is 0 //
-    int i,j;
+    int i,j,m,n;
     int k;
     
-    for (i=0;i<STATUS_Y_DIM;i++)
+    for (i=0;i<STATUS_Y_DIM;i++) 
     {
         for (j=0;j<STATUS_X_DIM;j++)
         {
-            buffer[i*STATUS_X_DIM+j]=20;/* fill the status bar with the color of background */
+            status_buffer[i*STATUS_X_DIM+j]=0;/* fill the status bar with the color of background */
         }
     }
 
-    int offset= (STATUS_X_DIM/2)-(strlen(string)*8/2);
+    int offset= (STATUS_X_DIM/2)-(strlen(string)*8/2); // we want to put the string in the middle of the screen //
     
-    for (i=0;i<16;i++)
+    for (i=0;i<16;i++)                                 // loop through the line //
     {
-        for (j=0;j<strlen(string);j++)
+        for (j=0;j<strlen(string);j++)                 // loop through the string character //
         {
-            for (k=0;k<8;k++)
+            for (k=0;k<8;k++)                          // loop through each character's eight pixels //
             {
                 if ((font_data[(int)string[j]][i] & mask[k])!=0)
                 {
-                    buffer[(i+1)*STATUS_X_DIM+offset+j*8+k]=45;
+                    status_buffer[(i+1)*STATUS_X_DIM+offset+j*8+k]=60;     // mask the bit and if it is not zero, then fill that pixel with our target color //
                 }
             }
         }
     }
-    return;
 
+    // This loop change the buffer in the form of plane_buffer and load it to the video memory //
+
+    for  (i=0;i<4;i++)            // loop through each STATUS //                  
+    {   
+        for (m=0;m<STATUS_Y_DIM;m++)    // loop through each row of a plane //
+        {
+            for (n=0;n<STATUS_X_WIDTH;n++)  // loop through each column of a plane //
+            {
+                status_plane_buffer[m*STATUS_X_WIDTH+n]=status_buffer[m*STATUS_X_DIM+4*n+i]; // offset of the buffer will be m*STATIS_X_DIM*4*n+i //
+            }
+        }
+        memcpy(tem_buffer+i*STATUS_X_WIDTH*STATUS_Y_DIM,status_plane_buffer,STATUS_X_WIDTH*STATUS_Y_DIM);
+    }
+    memcpy(status_buffer,tem_buffer,STATUS_X_DIM*STATUS_Y_DIM);
+    return;
 }
 
 

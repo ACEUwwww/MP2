@@ -255,34 +255,43 @@ game_loop ()
 	show_screen ();
 
 	/* This is for fill the status bar into the vedio memory */
+	/* first check whether the status_msg is empty */
+	/* if it's not empty, then we use a lock to fill the status bar with the status_msg */
+
 	if (status_msg[0]!='\0')
 	{
-		pthread_mutex_lock(&msg_lock);
+		pthread_mutex_lock(&msg_lock);    
 		fill_status_bar(status_msg);
 		pthread_mutex_unlock(&msg_lock);
 	}
+	
 
+	/* If it's empty, we then put our room name and our typed command onto it */
+	/* Try to load the whole status at one time and only call fill_status_bar for 1 times */
 	else
 	{
-		char * room = get_room_name(game_info.where);
-		char * command = (char*)get_typed_command();
+		char * room = get_room_name(game_info.where);		// give room name to the room string //
+		char * command = (char*)get_typed_command();		// give typed command to the command string //
+		int count1;
+		char status_buffer[STATUS_X_DIM/FONT_WIDTH+1];		//status buffer initialize with size 41 //
 
-		char status_buffer[STATUS_X_DIM/FONT_WIDTH+1];
+		for (count1=0;count1<40;count1++)
+		{
+			status_buffer[count1]=' ';						// first fill status buffer with ' '//
+		}
 
-		memset(status_buffer, ' ',STATUS_X_DIM/FONT_WIDTH);
-
-		int room_name_length= strlen(room);
+		int room_name_length= strlen(room);					
 		int cmd_length= strlen(command);
 
-		char *status_left=status_buffer;
-		char *status_right=status_buffer+(STATUS_X_DIM/FONT_WIDTH)-cmd_length-1;
+		char *status_left=status_buffer;					// left offset for the room name//
+		char *status_right=status_buffer+(STATUS_X_DIM/FONT_WIDTH)-cmd_length-1;// right offset for the command //
 
-		memcpy(status_right,command,(size_t)cmd_length);
-		memcpy(status_left,room,(size_t)room_name_length);
+		memcpy(status_right,command,cmd_length);	// copy the room name into the left of the status bar //
+		memcpy(status_left,room,room_name_length);	// copy the command into the right of the status bar//
+
+		status_buffer[39]='_';						// leave a _ at the end of the status bar //
 		
-		status_buffer[39]='_';
-		
-		fill_status_bar(status_buffer);
+		fill_status_bar(status_buffer);				// call the fill status bar function //
 	}
 
 	/* This is for fill the status bar into the vedio memory */
