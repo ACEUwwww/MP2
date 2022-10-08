@@ -92,13 +92,4 @@ extern photo_t* read_photo (const char* fname);
  * when a program terminates.)
  */
 
-int inverse_cmp(const void* A, const void* B);
-
-uint16_t level4_index(uint16_t data);
-
-uint16_t level2_index(uint16_t data);
-
-void gen_palette(uint16_t* color_data , photo_t *p );
-
-
 #endif /* PHOTO_H */
