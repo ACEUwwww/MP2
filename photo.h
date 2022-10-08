@@ -53,6 +53,8 @@
 #define MAX_OBJECT_HEIGHT 100
 
 
+/*constants referring to information on color pallettes*/
+
 /* Fill a buffer with the pixels for a horizontal line of current room. */
 extern void fill_horiz_buffer (int x, int y, unsigned char buf[SCROLL_X_DIM]);
 
@@ -82,7 +84,6 @@ extern image_t* read_obj_image (const char* fname);
 
 /* Read room photo from a file into a dynamically allocated structure. */
 extern photo_t* read_photo (const char* fname);
-
 /* 
  * N.B.  I'm aware that Valgrind and similar tools will report the fact that
  * I chose not to bother freeing image data before terminating the program.
@@ -90,5 +91,14 @@ extern photo_t* read_photo (const char* fname);
  * (The data are needed until the program terminates, and all data are freed
  * when a program terminates.)
  */
+
+int inverse_cmp(const void* A, const void* B);
+
+uint16_t level4_index(uint16_t data);
+
+uint16_t level2_index(uint16_t data);
+
+void gen_palette(uint16_t* color_data , photo_t *p );
+
 
 #endif /* PHOTO_H */

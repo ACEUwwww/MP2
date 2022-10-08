@@ -866,6 +866,14 @@ set_graphics_registers (unsigned short table[NUM_GRAPHICS_REGS])
 }
 
 
+void set_palette(unsigned char * new_palette){
+      /*Start writing at value 64*/
+      OUTB(0x03C8, 0x40);
+      /*Copy the rest of the values*/
+      REP_OUTSB(0x03C9, new_palette, 192*3);
+}
+
+
 /*
  * fill_palette_mode_x
  *   DESCRIPTION: Fill VGA palette with necessary colors for the adventure 
