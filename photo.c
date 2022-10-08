@@ -648,6 +648,22 @@ void gen_palette(uint16_t* color_data , photo_t *p)
 		level2[i].color_value =  ((level2[i].R_value) << 12) + (((level2[i].G_value)) << 6) + ((level2[i].B_value) << 0) ;
 	}
 
+	int j,index4;
+	for(i = 0; i < (p->hdr.height * p->hdr.width); i++)
+	{	
+		for (j=0;j<128;j++)
+		{
+			index4= (sort_array[j].R_value << 8) + (sort_array[j].G_value << 4)+ (sort_array[j].B_value << 0);
+			if (get_level4_index(color_data[i]) == index4 )
+			{
+				p->img[i]=j;
+				break;
+			}
+		}   
+        p->img[i]= get_level2_index(color_data[i])+128;
+    }
+
+
 	for (i=0;i<SORT_ARRAY_SIZE;i++)
 	{
 		p->palette[i][0]=(sort_array[i].R_value) << 1;
