@@ -564,41 +564,45 @@ uint16_t get_level2_index(uint16_t data)
 
 void gen_palette(uint16_t* color_data , photo_t *p)
 {
-	node_t level2[LEVEL2_SIZE];
-	node_t level4[LEVEL4_SIZE];
-	node_t sort_array[SORT_ARRAY_SIZE];
+	node_t level2[LEVEL2_SIZE] ;
+	node_t level4[LEVEL4_SIZE] ;
+	uint16_t index_array[LEVEL4_SIZE] ; 
 
-	int i,k;
+	int i;
 
 	uint16_t level2_index;
 	uint16_t level4_index;
 	
 	long R,G,B;
 	
+	/*initialize*/
+
 	for (i=0;i<LEVEL2_SIZE;i++);
 	{
-		level2[i].color_value = i;
-		level2[i].count = 0;
-		level2[i].R_value = 0;
-		level2[i].G_value = 0;
-		level2[i].B_value = 0;
+		level2[i].color_value = 0 ;
+		level2[i].count = 0 ;
+		level2[i].R_value = 0 ;
+		level2[i].G_value = 0 ;
+		level2[i].B_value = 0 ;
 	}
 	
 	for (i=0;i<LEVEL4_SIZE;i++);
 	{
-		level4[i].color_value = i;
-		level4[i].count = 0;
-		level4[i].R_value = 0;
-		level4[i].G_value = 0;
-		level4[i].B_value = 0;
+		level4[i].color_value = 0 ;
+		level4[i].count = 0 ;
+		level4[i].R_value = 0 ;
+		level4[i].G_value = 0 ;
+		level4[i].B_value = 0 ;
 	}
- 
+
+	/*fill and sort level4*/
 	for (i=0;i<(p->hdr.height*p->hdr.width);i++)
 	{
 		level4_index= get_level4_index(color_data[i]);
-		R= color_data[i] & BIT_MASK_RED >> 11 ;
-		G= color_data[i] & BIT_MASK_GREEN >> 5 ;
-		B= color_data[i] & BIT_MASK_BLUE >> 0 ;
+
+		R= (color_data[i] & BIT_MASK_RED) >> 11 ;
+		G= (color_data[i] & BIT_MASK_GREEN) >> 5 ;
+		B= (color_data[i] & BIT_MASK_BLUE) >> 0 ;
 
 		level4[level4_index].R_value += R ;
 		level4[level4_index].B_value += B ; 
@@ -606,76 +610,75 @@ void gen_palette(uint16_t* color_data , photo_t *p)
 		level4[level4_index].count += 1 ;
 	}
 
-	qsort(level4,LEVEL4_SIZE,sizeof(node_t),compare);
+	qsort(level4,LEVEL4_SIZE,sizeof(node_t),compare) ;
 
-	for (k=0;k<SORT_ARRAY_SIZE;k++)
-	{
-		sort_array[k] = level4[k];
-	}
-
-	for (i=0;i<SORT_ARRAY_SIZE;i++)
-	{
-		if (sort_array[i].count == 0)
-			continue;
-		sort_array[i].R_value = (sort_array[i].R_value) / (sort_array[i].count) ;
-		sort_array[i].B_value = (sort_array[i].B_value) / (sort_array[i].count) ;
-		sort_array[i].G_value = (sort_array[i].G_value) / (sort_array[i].count) ;
-		sort_array[i].color_value = ((sort_array[i].R_value) << 12) + ((sort_array[i].G_value) << 6) + ((sort_array[i].B_value) << 0) ;
-	}
-
-	for (i=128;i<LEVEL4_SIZE;i++)
+	for (i=0;i<LEVEL4_SIZE;i++)
 	{
 		if (level4[i].count==0)
 			continue;
-		level4[i].color_value = ((level4[i].R_value/level4[i].count) << 11) + ((level4[i].G_value/level4[i].count) << 5) + ((level4[i].B_value/level4[i].count) << 0);
-		level2_index=get_level2_index(level4[i].color_value);
-		R = level4[i].R_value;
-		G = level4[i].G_value;
-		B = level4[i].B_value;
-		level2[level2_index].R_value += R;
-		level2[level2_index].B_value += B;
-		level2[level2_index].G_value += G;
-		level2[level2_index].count += 1;
+		level4[i].R_value = level4[i].R_value / level4[i].count ;
+		level4[i].G_value = level4[i].G_value / level4[i].count ;
+		level4[i].B_value = level4[i].B_value / level4[i].count ;
+		level4[i].color_value =  ((level4[i].R_value) << 11) + ((level4[i].G_value) << 5) + ((level4[i].B_value) << 0) ;
+		index_array[get_level4_index(level4[i].color_value)] = i ;
 	}
+
+	/* fill level 2*/
+	for (i=128;i<LEVEL4_SIZE;i++)
+	{
+		level2_index=get_level2_index(level4[i].color_value) ;
+		R = level4[i].R_value ;
+		G = level4[i].G_value ; 
+		B = level4[i].B_value ;
+		level2[level2_index].R_value += R ;
+		level2[level2_index].B_value += B ;
+		level2[level2_index].G_value += G ;
+		level2[level2_index].count += 1 ;
+	}
+
 
 	for (i=0;i<LEVEL2_SIZE;i++)
 	{	
 		if (level2[i].count==0)
 			continue;
-		level2[i].R_value = level2[i].R_value/level2[i].count;
-		level2[i].G_value = level2[i].G_value/level2[i].count;
-		level2[i].B_value = level2[i].B_value/level2[i].count;
-		level2[i].color_value =  ((level2[i].R_value) << 12) + (((level2[i].G_value)) << 6) + ((level2[i].B_value) << 0) ;
+		level2[i].R_value = level2[i].R_value / level2[i].count ;
+		level2[i].G_value = level2[i].G_value / level2[i].count ;
+		level2[i].B_value = level2[i].B_value / level2[i].count ;
+		level2[i].color_value =  ((level2[i].R_value) << 11) + ((level2[i].G_value) << 5) + ((level2[i].B_value) << 0) ;
 	}
 
-	int j,index4;
+
+	/*fill p->img*/
 	for(i = 0; i < (p->hdr.height * p->hdr.width); i++)
 	{	
-		for (j=0;j<128;j++)
+		level4_index = index_array[get_level4_index(color_data[i])] ;
+
+		level2_index = get_level2_index(color_data[i]) ;
+
+		if ( level4_index < 128 )
 		{
-			index4= (sort_array[j].R_value << 8) + (sort_array[j].G_value << 4)+ (sort_array[j].B_value << 0);
-			if (get_level4_index(color_data[i]) == index4 )
-			{
-				p->img[i]=j;
-				break;
-			}
-		}   
-        p->img[i]= get_level2_index(color_data[i])+128;
-    }
-
-
-	for (i=0;i<SORT_ARRAY_SIZE;i++)
-	{
-		p->palette[i][0]=(sort_array[i].R_value) << 1;
-		p->palette[i][1]=(sort_array[i].G_value) << 0;
-		p->palette[i][2]=(sort_array[i].B_value) << 1;
+			p->img[i]= (uint8_t)(level4_index + 64) ;
+		}
+		else
+		{
+			p->img[i]= (uint8_t)(128 + 64 + level2_index) ;
+		}
 	}
 
-	for (i=0;i<LEVEL2_SIZE;i++)
+	/*fill palette*/
+	for (i=0;i<128;i++)
 	{
-		p->palette[i+128][0]= level2[i].R_value << 1;
-		p->palette[i+128][1]= level2[i].G_value << 0;
-		p->palette[i+128][2]= level2[i].B_value << 1;
+		p->palette[i][0]=(uint8_t)((level4[i].R_value) << 1);
+		p->palette[i][1]=(uint8_t)((level4[i].G_value) << 0);
+		p->palette[i][2]=(uint8_t)((level4[i].B_value) << 1);
 	}
+
+	for (i=0;i<64;i++)
+	{
+		p->palette[i+128][0]= (uint8_t)((level2[i].R_value) << 1);
+		p->palette[i+128][1]= (uint8_t)((level2[i].G_value) << 0);
+		p->palette[i+128][2]= (uint8_t)((level2[i].B_value) << 1);
+	}
+
 	return;
 }
