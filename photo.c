@@ -507,9 +507,14 @@ read_photo (const char* fname)
 
 #define LEVEL2_SIZE 64
 #define LEVEL4_SIZE 4096
+#define BIT_MASK_RED 0xF800
+#define BIT_MASK_GREEN 0X07E0
+#define BIT_MASK_BLUE 0x001F
 
 typedef struct node_t node_t;
 
+/*This struct stands for the nodes of octrees,
+ which contains index, count, RGB value.*/
 struct node_t {
 	int index;
 	int count;
@@ -518,7 +523,14 @@ struct node_t {
 	long B_value;
 };
 
-
+/* 
+ * 	 compare
+ *   DESCRIPTION: receive two values of  node_t type and define a comparation rule of it
+ *   INPUTS: const void* A, const void* B
+ *   OUTPUTS: whether A is bigger then B
+ *   RETURN VALUE: 1 or 0
+ *   SIDE EFFECTS: none
+ */
 int compare(const void* A, const void* B)
 {
 	if ((*(node_t*)A).count < (*(node_t*)B).count)
@@ -527,7 +539,13 @@ int compare(const void* A, const void* B)
 		return 0;
 }
 
-
+/* 
+ * 	 compare
+ *   DESCRIPTION: get a data of 16 bit and find its index in level4 of octree
+ *   INPUTS: 16bit color data of RRRRRGGGGGGBBBBB
+ *   OUTPUTS: index in level4 of octree
+ *   SIDE EFFECTS: none
+ */
 uint16_t get_level4_index(uint16_t data)
 {
 	unsigned short R,G,B;
@@ -539,7 +557,13 @@ uint16_t get_level4_index(uint16_t data)
 	return return_value;
 }
 
-
+/* 
+ * 	 compare
+ *   DESCRIPTION: get a data of 16 bit and find its index in level2 of octree
+ *   INPUTS: 16bit color data of RRRRRGGGGGGBBBBB
+ *   OUTPUTS: index in level4 of octree
+ *   SIDE EFFECTS: NONE
+ */
 uint16_t get_level2_index(uint16_t data)
 {
 	unsigned short R,G,B;
@@ -552,17 +576,25 @@ uint16_t get_level2_index(uint16_t data)
 }
 
 
-
+/* 
+ * 	 compare
+ *   DESCRIPTION: Given a pointer to a photo data and a pointer to the struct of photo_t, generate a palette of 192*3 in it and 
+ *   INPUTS: 
+ *   OUTPUTS: 
+ *   RETURN VALUE: 
+ *   SIDE EFFECTS: 
+ */
 void gen_palette(uint16_t * color_data, photo_t * p)
 {
       node_t level2[LEVEL2_SIZE];                         
       node_t level4[LEVEL4_SIZE];     
-	  int index4_array[LEVEL4_SIZE];            
+	  int index4_array[LEVEL4_SIZE];     /* index4 array stands for the dirction in sorted level4*/       
 
       int level4index, level2index;               
       int i;         
       long R, G, B;    
 
+	  /* initialize the octree nodes */
       for(i = 0; i < LEVEL2_SIZE; i++){
             level2[i].index = i;
 			level2[i].count = 0;
@@ -578,15 +610,17 @@ void gen_palette(uint16_t * color_data, photo_t * p)
 			level4[i].B_value = 0 ;
       }
 
+	  /* First we load the level4 of octreee*/
       for(i = 0; i < (p->hdr.height * p->hdr.width); i++)
 	  {
     
             level4index = get_level4_index(color_data[i]);
-			level2index = get_level2_index(color_data[i]);
 
-            R = ((color_data[i] & 0xF800) >> 11) << 1;
-            G = ((color_data[i] & 0X07E0) >> 5) << 0;
-            B = ((color_data[i] & 0x001F) >> 0) << 1;
+            R = ((color_data[i] & BIT_MASK_RED) >> 11) << 1;    /*11 stands for red offset*/
+            G = ((color_data[i] & BIT_MASK_GREEN) >> 5) << 0;	/* 5 stands for green offset*/
+            B = ((color_data[i] & BIT_MASK_BLUE) >> 0) << 1;	/* 0 stands for blue offset*/
+
+			/* load the sum of RGB into R,G,B value of octree node,and count ++*/
 
             level4[level4index].R_value += R ;
             level4[level4index].G_value += G ;
@@ -611,9 +645,11 @@ void gen_palette(uint16_t * color_data, photo_t * p)
 		level2[i].B_value = level2[i].B_value / level2[i].count ;
 	}*/
 	
-
+	  /*qsort the level4*/
       qsort(level4, LEVEL4_SIZE, sizeof(node_t), compare);
 
+	  /*load the first 128 RGB of sorted level 4 and caculate the average*/
+	  /* 128 stands for 128 colors*/
 	  for (i=0;i<128;i++)
 	  {
 			if (level4[i].count==0)
@@ -622,12 +658,13 @@ void gen_palette(uint16_t * color_data, photo_t * p)
 			level4[i].G_value = level4[i].G_value / level4[i].count;
 			level4[i].B_value = level4[i].B_value / level4[i].count;
 	  }
-	
+	  /*load the index4_array*/
+	  /*4096 stands for level4 size*/
 	  for (i=0;i<4096;i++)
 	  {
 			index4_array[level4[i].index]=i;
 	  }
-	
+	  /*load the sum of RGB value for the left values*/
 	  for (i=128;i<4096;i++)
 	  {
 			level2index=(((level4[i].index & 0xC00)>>10)<<4)+(((level4[i].index & 0x0C0) >> 6) << 2)+((level4[i].index & 0x00C) >>2);
@@ -636,8 +673,8 @@ void gen_palette(uint16_t * color_data, photo_t * p)
 			level2[level2index].B_value += level4[i].B_value ;
 			level2[level2index].count   += level4[i].count   ;
 	  }
-
-	  	for (i=0;i<LEVEL2_SIZE;i++)
+      /*caculate the average for the left ajfl*/
+		for (i=0;i<LEVEL2_SIZE;i++)
 		{
 			if (level2[i].count==0)
 				continue;
