@@ -42,6 +42,13 @@
 #include <string.h>
 #include <sys/time.h>
 #include <time.h>
+#include <ctype.h>
+#include <fcntl.h>
+
+#include <sys/io.h>
+#include <termio.h>
+#include <termios.h>
+#include <unistd.h>
 
 #include "assert.h"
 #include "input.h"
@@ -49,7 +56,7 @@
 #include "photo.h"
 #include "text.h"
 #include "world.h"
-
+#include "module/tuxctl-ioctl.h"
 
 /*
  * If NDEBUG is not defined, we execute sanity checks to make sure that
@@ -66,12 +73,11 @@ static int sanity_check (void);
 #define TICK_USEC      50000 /* tick length in microseconds          */
 #define STATUS_MSG_LEN 40    /* maximum length of status message     */
 #define MOTION_SPEED   2     /* pixels moved per command             */
-#define STATUS_X_DIM 320
-#define STATUS_Y_DIM 18
-#define STATUS_X_WIDTH (STATUS_X_DIM/4)
-#define STATUS_SIZE STATUS_X_WIDTH*STATUS_Y_DIM
-#define FONT_HEIGHT 16
-#define FONT_WIDTH 8
+
+/*0 , 1 , 2 , 3 , 4 , 5 , 6 , 7 , 8 , 9 , A , B, C , D , E , F */
+unsigned char SEGMENTS[16] = {0xE7, 0x06, 0xCB, 0x8F, 0x2E, 0xAD, 0xED, 0x86, 0xEF, 0xAF, 0xEE, 0x6D, 0xE1, 0x4F, 0xE9, 0xE8};
+
+
 /* outcome of the game */
 typedef enum {GAME_WON, GAME_QUIT} game_condition_t;
 
@@ -139,6 +145,7 @@ static const typed_cmd_t cmd_list[] = {
 /* local functions--see function headers for details */
 
 static void cancel_status_thread (void* ignore);
+static void cancel_tux_thread (void* ignore);
 static game_condition_t game_loop (void);
 static int32_t handle_typing (void);
 static void init_game (void);
@@ -148,9 +155,13 @@ static void move_photo_right (void);
 static void move_photo_up (void);
 static void redraw_room (void);
 static void* status_thread (void* ignore);
+static void* tux_thread (void* ignore);
 static int time_is_after (struct timeval* t1, struct timeval* t2);
-
-
+static uint32_t game_time = 0;
+static uint32_t buttons_pressed;
+static cmd_t	buttons;
+static cmd_t last_button = CMD_NONE;
+static int32_t enter_room;      /* player has changed rooms        */
 /* file-scope variables */
 
 static game_info_t game_info; /* game information */
@@ -171,10 +182,19 @@ static game_info_t game_info; /* game information */
  * condition variable msg_cv (while holding the msg_lock).
  */
 static pthread_t status_thread_id;
+static pthread_t tux_thread_id;
+static pthread_mutex_t Control_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t  Control_cv = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t msg_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t  msg_cv = PTHREAD_COND_INITIALIZER;
 static char status_msg[STATUS_MSG_LEN + 1] = {'\0'};
 
+#define STATUS_X_DIM 320
+#define STATUS_Y_DIM 18
+#define STATUS_X_WIDTH (STATUS_X_DIM/4)
+#define STATUS_SIZE STATUS_X_WIDTH*STATUS_Y_DIM
+#define FONT_HEIGHT 16
+#define FONT_WIDTH 8
 
 /* 
  * cancel_status_thread
@@ -191,6 +211,20 @@ cancel_status_thread (void* ignore)
     (void)pthread_cancel (status_thread_id);
 }
 
+/* 
+ * cancel_tux_thread
+ *   DESCRIPTION: Terminates the tux_control helper thread.  Used as
+ *                a cleanup method to ensure proper shutdown.
+ *   INPUTS: none (ignored)
+ *   OUTPUTS: none
+ *   RETURN VALUE: none
+ *   SIDE EFFECTS: none
+ */
+static void
+cancel_tux_thread (void* ignore)
+{
+	(void)pthread_cancel (tux_thread_id);
+}
 
 /* 
  * game_loop
@@ -211,7 +245,7 @@ game_loop ()
 
     struct timeval cur_time; /* current time (during tick)      */
     cmd_t cmd;               /* command issued by input control */
-    int32_t enter_room;      /* player has changed rooms        */
+
 
     /* Record the starting time--assume success. */
     (void)gettimeofday (&start_time, NULL);
@@ -253,11 +287,6 @@ game_loop ()
 	}
 
 	show_screen ();
-
-	/* This is for fill the status bar into the vedio memory */
-	/* first check whether the status_msg is empty */
-	/* if it's not empty, then we use a lock to fill the status bar with the status_msg */
-
 	if (status_msg[0]!='\0')
 	{
 		pthread_mutex_lock(&msg_lock);    
@@ -293,9 +322,6 @@ game_loop ()
 		
 		fill_status_bar(status_buffer);				// call the fill status bar function //
 	}
-
-	/* This is for fill the status bar into the vedio memory */
-
 	/*
 	 * Wait for tick.  The tick defines the basic timing of our
 	 * event loop, and is the minimum amount of time between events.
@@ -329,40 +355,57 @@ game_loop ()
 	 * off to the nearest tick by definition.
 	 */
 	/* (none right now...) */
+	
+	if (game_time != tick_time.tv_sec - start_time.tv_sec){
+		display_time_on_tux(tick_time.tv_sec - start_time.tv_sec);
+		game_time = tick_time.tv_sec - start_time.tv_sec;
+	}
+	
 
 	/* 
 	 * Handle synchronous events--in this case, only player commands. 
 	 * Note that typed commands that move objects may cause the room
 	 * to be redrawn.
 	 */
-	
-	cmd = get_command ();
-	switch (cmd) {
-	    case CMD_UP:    move_photo_down ();  break;
-	    case CMD_RIGHT: move_photo_left ();  break;
-	    case CMD_DOWN:  move_photo_up ();    break;
-	    case CMD_LEFT:  move_photo_right (); break;
-	    case CMD_MOVE_LEFT:   
-		enter_room = (TC_CHANGE_ROOM == 
-			      try_to_move_left (&game_info.where));
-		break;
-	    case CMD_ENTER:
-		enter_room = (TC_CHANGE_ROOM ==
-			      try_to_enter (&game_info.where));
-		break;
-	    case CMD_MOVE_RIGHT:
-		enter_room = (TC_CHANGE_ROOM == 
-			      try_to_move_right (&game_info.where));
-		break;
-	    case CMD_TYPED:
-		if (handle_typing ()) {
-		    enter_room = 1;
-		}
-		break;
-	    case CMD_QUIT: return GAME_QUIT;
-	    default: break;
+	/*Get the current command*/
+	int ignore_keyboard = 0;
+	buttons = get_tux_command();
+	buttons_pressed = (buttons !=CMD_NONE);
+	pthread_mutex_lock(&Control_lock);
+	if(buttons_pressed){
+		ignore_keyboard = 1;
+		pthread_cond_signal(&Control_cv);
 	}
+	pthread_mutex_unlock(&Control_lock);
 
+	if(!ignore_keyboard){
+		cmd = get_command ();
+		switch (cmd) {
+			case CMD_UP:    move_photo_down ();  break;
+			case CMD_RIGHT: move_photo_left ();  break;
+			case CMD_DOWN:  move_photo_up ();    break;
+			case CMD_LEFT:  move_photo_right (); break;
+			case CMD_MOVE_LEFT:   
+			enter_room = (TC_CHANGE_ROOM == 
+					try_to_move_left (&game_info.where));
+			break;
+			case CMD_ENTER:
+			enter_room = (TC_CHANGE_ROOM ==
+					try_to_enter (&game_info.where));
+			break;
+			case CMD_MOVE_RIGHT:
+			enter_room = (TC_CHANGE_ROOM == 
+					try_to_move_right (&game_info.where));
+			break;
+			case CMD_TYPED:
+			if (handle_typing ()) {
+				enter_room = 1;
+			}
+			break;
+			case CMD_QUIT: return GAME_QUIT;
+			default: break;
+		}
+	}
 	/* If player wins the game, their room becomes NULL. */
 	if (NULL == game_info.where) {
 	    return GAME_WON;
@@ -729,6 +772,51 @@ status_thread (void* ignore)
 
 
 /* 
+ * tux_thread
+ *   DESCRIPTION: Function executed by tux control helper thread.
+ *   INPUTS: none (ignored)
+ *   OUTPUTS: none
+ *   RETURN VALUE: NULL
+ *   SIDE EFFECTS: Changes the control into TUX
+ */
+static void*
+tux_thread (void* ignore)
+{
+
+	while(1){
+		pthread_mutex_lock(&Control_lock);
+		while (!buttons_pressed){
+			pthread_cond_wait(&Control_cv,&Control_lock);
+		}
+		switch (buttons){
+			case CMD_UP:    move_photo_down ();  break;
+			case CMD_RIGHT: move_photo_left ();  break;
+			case CMD_DOWN:  move_photo_up ();    break;
+			case CMD_LEFT:  move_photo_right (); break;
+			case CMD_MOVE_LEFT:   
+				enter_room = (TC_CHANGE_ROOM == 
+						try_to_move_left (&game_info.where));
+				break;
+			case CMD_ENTER:
+				enter_room = (TC_CHANGE_ROOM ==
+						try_to_enter (&game_info.where));
+				break;
+			case CMD_MOVE_RIGHT:
+				enter_room = (TC_CHANGE_ROOM == 
+						try_to_move_right (&game_info.where));
+				break;
+			default:
+				break;
+		}
+		buttons_pressed = 0;
+		pthread_mutex_unlock(&Control_lock);
+	}
+
+    /* This code never executes--the thread should always be cancelled. */
+    return NULL;
+}
+
+/* 
  * time_is_after 
  *   DESCRIPTION: Check whether one time is at or after a second time.
  *   INPUTS: t1 -- the first time
@@ -811,6 +899,12 @@ main ()
     }
     push_cleanup (cancel_status_thread, NULL); {
 
+    /* Create tux thread. */
+    if (0 != pthread_create (&tux_thread_id, NULL, tux_thread, NULL)) {
+        PANIC ("failed to create tux thread");
+    }
+    push_cleanup (cancel_tux_thread, NULL); {
+
 	/* Start mode X. */
 	if (0 != set_mode_X (fill_horiz_buffer, fill_vert_buffer)) {
 	    PANIC ("cannot initialize mode X");
@@ -825,6 +919,7 @@ main ()
 
 		game = game_loop ();
 
+		} pop_cleanup (1);
 	    } pop_cleanup (1);
 
 	} pop_cleanup (1);
@@ -901,4 +996,5 @@ sanity_check ()
     /* Return success/failure. */
     return ret_val;
 }
+
 #endif /* !defined(NDEBUG) */

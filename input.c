@@ -57,17 +57,20 @@
 #include "assert.h"
 #include "input.h"
 
+#include "module/tuxctl-ioctl.h"
+
+
 /* set to 1 and compile this file by itself to test functionality */
 #define TEST_INPUT_DRIVER 0
 
 /* set to 1 to use tux controller; otherwise, uses keyboard input */
 #define USE_TUX_CONTROLLER 0
 
+/* Set the fd as global variable*/
+static int fd;
 
 /* stores original terminal settings */
 static struct termios tio_orig;
-
-
 /* 
  * init_input
  *   DESCRIPTION: Initializes the input controller.  As both keyboard and
@@ -84,7 +87,7 @@ int
 init_input ()
 {
     struct termios tio_new;
-
+	int ldisc_num;
     /*
      * Set non-blocking mode so that stdin can be read without blocking
      * when no new keystrokes are available.
@@ -116,6 +119,11 @@ init_input ()
 	return -1;
     }
 
+	/* open the port */
+	fd = open("/dev/ttyS0", O_RDWR | O_NOCTTY);
+	ldisc_num = N_MOUSE;
+	ioctl(fd, TIOCSETD, &ldisc_num);
+	ioctl(fd, TUX_INIT);
     /* Return success. */
     return 0;
 }
@@ -176,6 +184,7 @@ get_command ()
     static cmd_t command = CMD_NONE;
     cmd_t pushed = CMD_NONE;
     int ch;
+	
 
     /* Read all characters from stdin. */
     while ((ch = getc (stdin)) != EOF) {
@@ -267,6 +276,7 @@ get_command ()
 	} else if (10 == ch || 13 == ch) {
 	    pushed = CMD_TYPED;
 	}
+
 #endif /* USE_TUX_CONTROLLER */
     }
 
@@ -274,6 +284,7 @@ get_command ()
      * Once a direction is pushed, that command remains active
      * until a turn is taken.
      */
+	pushed = get_tux_command();
     if (pushed == CMD_NONE) {
         command = CMD_NONE;
     }
@@ -308,33 +319,60 @@ shutdown_input ()
 void
 display_time_on_tux (int num_seconds)
 {
-#if (USE_TUX_CONTROLLER != 0)
-#error "Tux controller code is not operational yet."
-#endif
+// #if (USE_TUX_CONTROLLER != 0)
+// #error "Tux controller code is not operational yet."
+// #endif
+	int minute, second ;
+	int LED1,LED2,LED3,LED4;
+	long arg;
+
+	arg = 0x040F0000 ;
+	if (num_seconds > 5999){
+		num_seconds -= 5999;
+	}
+	minute = num_seconds / 60 ;
+	second = num_seconds % 60 ;	
+
+	LED1 = minute / 10;
+	LED2 = minute % 10;
+	LED3 = second / 10;
+	LED4 = second % 10;
+
+	arg= arg | (((LED1 << 12) & 0xF000) | ((LED2 << 8) & 0x0F00) | ((LED3 << 4 ) & 0x00F0) | ((LED4 << 0) & 0x000F)) ;
+
+	if (LED1 == 0)
+	{
+		arg = arg & 0xFFF7FFFF;
+	}
+	ioctl(fd, TUX_SET_LED, arg);
 }
 
 
 #if (TEST_INPUT_DRIVER == 1)
 int
 main ()
-{
+{	
+
     cmd_t last_cmd = CMD_NONE;
     cmd_t cmd;
+	int i;
     static const char* const cmd_name[NUM_COMMANDS] = {
         "none", "right", "left", "up", "down", 
 	"move left", "enter", "move right", "typed command", "quit"
     };
 
-    /* Grant ourselves permission to use ports 0-1023 */
     if (ioperm (0, 1024, 1) == -1) {
 	perror ("ioperm");
 	return 3;
     }
-
+	i = 0;
     init_input ();
+	display_time_on_tux (83);
     while (1) {
         while ((cmd = get_command ()) == last_cmd);
-	last_cmd = cmd;
+		last_cmd = cmd;
+		i++;
+		display_time_on_tux (i);
 	printf ("command issued: %s\n", cmd_name[cmd]);
 	if (cmd == CMD_QUIT)
 	    break;
@@ -344,4 +382,81 @@ main ()
     return 0;
 }
 #endif
+
+/* 
+ * get_tux_command
+ *   DESCRIPTION: Reads a command from the TUX
+ *   INPUTS: none 
+ *   OUTPUTS: none
+ *   RETURN VALUE: command issued by the TUX controller
+ *   SIDE EFFECTS: drains any TUX input
+ */
+cmd_t
+get_tux_command(){
+    static cmd_t pre = CMD_NONE;
+    cmd_t cur = CMD_NONE;
+	uint32_t arg;
+	/* gets the 8 bit data from tux button*/
+	ioctl(fd,TUX_BUTTONS,&arg);
+	// printf("current argument is %x\n",arg);
+	/*firstly, check the dirction move*/
+	switch (arg & dirc_mask)
+	{
+	case is_up:
+		pre = CMD_UP;
+		return pre;
+	case is_down:
+		pre = CMD_DOWN;
+		return pre;
+	case is_left:
+		pre = CMD_LEFT;
+		return pre;
+	case is_right:
+		pre = CMD_RIGHT;
+		return pre;
+	default:
+		break;
+	}
+	/* then, check the abcs button, for the A,B,C button, check
+	 * whether the previous command is equal to the current command
+	 * if it is, return com_none
+	 */
+	switch(arg & ABCS_mask)
+	{
+	case is_start:
+		pre = CMD_NONE;
+		return cur;
+	case is_a:
+		cur = (CMD_MOVE_LEFT == pre)?CMD_NONE:CMD_MOVE_LEFT;
+		pre = (CMD_MOVE_LEFT == cur)?cur:pre;
+		return cur;
+	case is_b:
+		cur = (CMD_ENTER == pre)?CMD_NONE:CMD_ENTER;
+		pre = (CMD_ENTER == cur)?cur:pre;
+		return cur;
+	case is_c:
+		cur = (CMD_MOVE_RIGHT == pre)?CMD_NONE:CMD_MOVE_RIGHT;
+		pre = (CMD_MOVE_RIGHT == cur)?cur:pre;
+		return cur;
+	default:
+		pre = CMD_NONE;
+		return CMD_NONE;
+	}
+}
+
+
+
+/* 
+ * get_fd
+ *   DESCRIPTION: get the fd for further use
+ *   INPUTS: none 
+ *   OUTPUTS: none
+ *   RETURN VALUE: fd
+ *   SIDE EFFECTS: drains any TUX input
+ */
+int get_fd(){
+	return fd;
+}
+
+
 
